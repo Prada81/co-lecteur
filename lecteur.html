@@ -7,64 +7,107 @@
 <title>Lecteur vidéo — Castres Olympique</title>
 <!--
   Lecteur vidéo des rapports exportés (Rapport Fin de Match / Rapport ADV).
-  Ne contient AUCUNE donnée : le rapport ouvre cette page dans une fenêtre et
-  lui indique, dans l'adresse (#v=...&d=...&f=...), la vidéo YouTube et le
-  début / la fin de l'action à montrer. YouTube refuse son lecteur dans un
-  fichier ouvert depuis l'ordinateur ; ici, la page a une vraie adresse web.
+  Ne contient AUCUNE donnée : YouTube refuse son lecteur dans un fichier ouvert
+  depuis l'ordinateur ; cette page, elle, a une vraie adresse web.
+
+  Deux façons de l'utiliser :
+  - #mode=liste : le rapport ouvre cette fenêtre par-dessus lui-même et lui
+    envoie (postMessage) la liste des actions cliquées. La page affiche alors
+    le même lecteur que le rapport : liste, précédent / suivant, -5 s / +5 s,
+    enchaînement. Rien n'est enregistré.
+  - #v=...&d=...&f=... : une seule action (exports plus anciens).
 -->
 <style>
-  html, body { margin: 0; height: 100%; background: #000; color: #fff;
+  html, body { margin: 0; height: 100%; background: #05070d; color: #fff;
                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; }
-  #tete { position: fixed; top: 0; left: 0; right: 0; height: 34px; display: flex; align-items: center;
-          gap: 10px; padding: 0 12px; background: #092966; font-size: 14px; font-weight: 700; z-index: 2; }
-  #tete span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #zone { position: fixed; top: 34px; left: 0; right: 0; bottom: 0; }
-  #zone iframe, #p { width: 100%; height: 100%; display: block; }
-  #msg { position: fixed; inset: 34px 0 0 0; display: none; align-items: center; justify-content: center;
-         text-align: center; padding: 30px; font-size: 16px; line-height: 1.5; }
+  #cadre { position: fixed; inset: 0; display: flex; flex-direction: column; background: #0d1a33; }
+  #tete { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid rgba(255,255,255,.15); flex-wrap: wrap; }
+  #titre { font-size: 18px; flex: 1; min-width: 200px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #compteur { font-size: 13px; opacity: .8; }
+  .btn { background: #004cd2; color: #fff; border: none; border-radius: 8px; padding: 6px 14px; font: inherit; font-size: 13px;
+         font-weight: 700; cursor: pointer; text-decoration: none; display: inline-block; }
+  .btn.sec { background: rgba(255,255,255,.12); } .btn.yt { background: #c4302b; }
+  #corps { display: flex; min-height: 0; flex: 1; }
+  #gauche { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 10px; }
+  #zone { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+  #boite { position: relative; aspect-ratio: 16/9; background: #000; border-radius: 8px; overflow: hidden; width: 100%; max-height: 100%; }
+  #boite iframe, #p { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #msg { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; text-align: center;
+         padding: 30px; font-size: 16px; line-height: 1.5; background: #000; }
   #msg a { color: #8cb6fa; }
+  #info { margin-top: 8px; font-size: 14px; min-height: 20px; }
+  #ctrl { display: flex; gap: 8px; margin-top: 8px; align-items: center; flex-wrap: wrap; }
+  #liste { width: 340px; flex: 0 0 340px; overflow: auto; border-left: 1px solid rgba(255,255,255,.15); }
+  .item { padding: 7px 12px; border-bottom: 1px solid rgba(255,255,255,.08); cursor: pointer; font-size: 13px; border-left: 4px solid transparent;
+          display: flex; gap: 8px; align-items: flex-start; }
+  .item:hover { background: rgba(255,255,255,.08); }
+  .item.pos { border-left-color: #27CB39; background: rgba(39,203,57,.14); }
+  .item.neg { border-left-color: #E0525C; background: rgba(224,82,92,.16); }
+  .item.actif { background: #004cd2; }
+  .item .m { opacity: .75; font-size: 12px; } .item .txt { flex: 1; min-width: 0; }
+  .item a { color: #fff; opacity: .8; font-size: 11px; text-decoration: none; border: 1px solid rgba(255,255,255,.35); border-radius: 6px; padding: 1px 6px; white-space: nowrap; }
+  body.simple #liste, body.simple #ctrl, body.simple #compteur, body.simple #yt, body.simple #fermer { display: none; }
 </style>
 </head>
 <body>
-<div id="tete"><span id="titre">Castres Olympique — vidéo</span></div>
-<div id="zone"><div id="p"></div></div>
-<div id="msg"></div>
+<div id="cadre">
+  <div id="tete">
+    <span id="titre">Castres Olympique — vidéo</span><span id="compteur"></span>
+    <a id="yt" class="btn yt" target="_blank" rel="noopener" style="display:none">▶ Ouvrir sur YouTube</a>
+    <button type="button" id="fermer" class="btn sec">✕ Fermer</button>
+  </div>
+  <div id="corps">
+    <div id="gauche">
+      <div id="zone"><div id="boite"><div id="p"></div><div id="msg"></div></div></div>
+      <div id="info"></div>
+      <div id="ctrl">
+        <button type="button" id="prec" class="btn">◀ Précédent</button>
+        <button type="button" id="moins5" class="btn" title="Reculer de 5 secondes">⏪ −5 s</button>
+        <button type="button" id="rejouer" class="btn">↺ Rejouer</button>
+        <button type="button" id="plus5" class="btn" title="Avancer de 5 secondes">+5 s ⏩</button>
+        <button type="button" id="suiv" class="btn">Suivant ▶</button>
+        <label style="margin-left:auto;font-size:13px;display:flex;align-items:center;gap:6px"><input type="checkbox" id="auto" checked> Enchaîner</label>
+      </div>
+    </div>
+    <div id="liste"></div>
+  </div>
+</div>
 <script>
-  var yt = null, pret = false, enCours = null;
-  function params() {
-    var q = new URLSearchParams(location.hash.slice(1));
-    var v = q.get('v') || '';
-    if (!/^[\w-]{11}$/.test(v)) { return null; }
-    return { v: v, d: Math.max(0, parseFloat(q.get('d')) || 0), f: parseFloat(q.get('f')) || 0, t: q.get('t') || '', n: q.get('n') || '', charge: Date.now() };
-  }
+  var $ = function (id) { return document.getElementById(id); };
+  var yt = null, pret = false, apiPrete = false;
+  var clips = [], i = -1, charge = 0, modeListe = /(^|[#&])mode=liste/.test(location.hash);
+  if (!modeListe) { document.body.classList.add('simple'); }
+
   function prevenir(o) { try { if (window.opener) { window.opener.postMessage(Object.assign({ co: 1 }, o), '*'); } } catch (e) {} }
-  function message(html) { var m = document.getElementById('msg'); m.innerHTML = html; m.style.display = html ? 'flex' : 'none'; }
-  function lire() {
-    var a = params();
-    if (!a) { message('Cette page sert de lecteur vidéo aux rapports du Castres Olympique.<br>Ouvrez-la depuis un rapport exporté.'); return; }
+  function message(html) { var m = $('msg'); m.innerHTML = html || ''; m.style.display = html ? 'flex' : 'none'; }
+  function lienYT(c) { return c && c.v ? 'https://www.youtube.com/watch?v=' + encodeURIComponent(c.v) + '&t=' + Math.floor(c.d) + 's' : null; }
+  function ajuster() { var z = $('zone'), b = $('boite'); b.style.width = Math.min(z.clientWidth, z.clientHeight * 16 / 9) + 'px'; }
+  window.addEventListener('resize', ajuster);
+
+  // ── Lecture d'une action ───────────────────────────────────────────────
+  function charger(c) {
     message('');
-    document.getElementById('titre').textContent = a.t || 'Castres Olympique — vidéo';
-    document.title = a.t || 'Lecteur vidéo';
-    enCours = a;
-    var o = { videoId: a.v, startSeconds: a.d };
-    if (a.f > a.d) { o.endSeconds = a.f; }
+    charge = Date.now();
+    if (!c.v) { message("Pas de vidéo YouTube pour ce match."); return; }
+    var o = { videoId: c.v, startSeconds: c.d };
+    if (c.f > c.d) { o.endSeconds = c.f; }
     if (!yt) {
       yt = new YT.Player('p', {
-        width: '100%', height: '100%', videoId: a.v,
-        playerVars: { start: Math.floor(a.d), end: a.f > a.d ? Math.ceil(a.f) : undefined, autoplay: 1, rel: 0, playsinline: 1 },
+        width: '100%', height: '100%', videoId: c.v,
+        playerVars: { start: Math.floor(c.d), end: c.f > c.d ? Math.ceil(c.f) : undefined, autoplay: 1, rel: 0, playsinline: 1 },
         events: {
           onReady: function () { pret = true; prevenir({ etat: 'pret' }); },
           onStateChange: function (e) {
-            // « Fin » de l'action en cours seulement : au changement d'action,
-            // YouTube signale parfois encore la fin de la précédente.
-            if (e.data === YT.PlayerState.ENDED && enCours && Date.now() - enCours.charge > 1500) {
-              prevenir({ etat: 'fin', n: enCours.n });
+            // Fin de l'action EN COURS seulement (au changement, YouTube signale
+            // parfois encore la fin de la précédente).
+            if (e.data === YT.PlayerState.ENDED && Date.now() - charge > 1500) {
+              if (modeListe) { suivantAuto(); } else { prevenir({ etat: 'fin', n: enCours && enCours.n }); }
             }
           },
           onError: function (e) {
             prevenir({ etat: 'erreur', code: e.data });
-            message('YouTube ne peut pas lire cette vidéo ici (erreur ' + e.data + ').<br><a target="_blank" rel="noopener" href="https://www.youtube.com/watch?v='
-              + encodeURIComponent(a.v) + '&t=' + Math.floor(a.d) + 's">Ouvrir sur YouTube</a>');
+            var l = lienYT(modeListe ? clips[i] : enCours);
+            message('YouTube ne peut pas lire cette vidéo ici (erreur ' + e.data + ').' + (l ? '<br><a target="_blank" rel="noopener" href="' + l + '">Ouvrir sur YouTube</a>' : ''));
           }
         }
       });
@@ -72,19 +115,104 @@
       yt.loadVideoById(o);
     }
   }
-  function onYouTubeIframeAPIReady() { lire(); }
-  window.addEventListener('hashchange', function () { if (window.YT && YT.Player) { lire(); } });
-  // Le rapport peut aussi demander « Rejouer », « Pause » ou −5 s / +5 s sans changer d'adresse.
+  function decaler(sec) {
+    if (!yt || !pret) { return; }
+    yt.seekTo(Math.max(0, yt.getCurrentTime() + sec), true); yt.playVideo();
+    charge = Date.now();   // un saut au-delà de la fin n'enchaîne pas aussitôt
+  }
+
+  // ── Mode liste (exports récents) ───────────────────────────────────────
+  function suivantAuto() { if ($('auto').checked && i < clips.length - 1) { jouer(i + 1); } }
+  function jouer(k) {
+    if (k < 0 || k >= clips.length) { return; }
+    i = k;
+    var c = clips[i];
+    $('compteur').textContent = 'Clip ' + (i + 1) + ' / ' + clips.length;
+    Array.prototype.forEach.call($('liste').children, function (el, n) { el.classList.toggle('actif', n === i); });
+    if ($('liste').children[i]) { $('liste').children[i].scrollIntoView({ block: 'nearest' }); }
+    $('info').textContent = (c.nom ? c.nom + ' · ' : '') + (c.minute || '') + (c.libelle ? ' · ' + c.libelle : '');
+    var l = lienYT(c); $('yt').style.display = l ? '' : 'none'; if (l) { $('yt').href = l; }
+    if (apiPrete) { charger(c); }
+  }
+  function recevoirListe(d) {
+    clips = (d.clips || []).filter(function (c) { return c && (!c.v || /^[\w-]{11}$/.test(c.v)); });
+    if (!clips.length) { return; }
+    $('titre').textContent = '▶ ' + (d.titre || 'Clips');
+    document.title = d.titre || 'Lecteur vidéo';
+    var liste = $('liste'); liste.innerHTML = '';
+    clips.forEach(function (c, n) {
+      var it = document.createElement('div');
+      it.className = 'item' + (c.sens ? ' ' + c.sens : '');
+      it.innerHTML = '<div class="txt"><div><strong></strong> <span class="m"></span></div><div class="m l"></div></div>';
+      it.querySelector('strong').textContent = (n + 1) + '. ' + (c.nom || '');
+      it.querySelector('.m').textContent = c.minute || '';
+      it.querySelector('.l').textContent = c.libelle || '';
+      var l = lienYT(c);
+      if (l) {
+        var a = document.createElement('a'); a.href = l; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'YouTube ↗';
+        a.addEventListener('click', function (e) { e.stopPropagation(); });
+        it.appendChild(a);
+      }
+      it.addEventListener('click', function () { jouer(n); });
+      liste.appendChild(it);
+    });
+    ajuster();
+    jouer(Math.max(0, Math.min(clips.length - 1, d.depart || 0)));
+    window.focus();
+  }
+  $('prec').onclick = function () { jouer(i - 1); };
+  $('suiv').onclick = function () { jouer(i + 1); };
+  $('rejouer').onclick = function () { if (clips[i]) { charger(clips[i]); } };
+  $('moins5').onclick = function () { decaler(-5); };
+  $('plus5').onclick = function () { decaler(5); };
+  $('fermer').onclick = function () { window.close(); };
+  document.addEventListener('keydown', function (e) {
+    if (!modeListe) { return; }
+    if (e.key === 'ArrowRight') { jouer(i + 1); }
+    else if (e.key === 'ArrowLeft') { jouer(i - 1); }
+    else if (e.key === 'Escape') { window.close(); }
+  });
+
+  // ── Mode une action (#v=...) : exports plus anciens ────────────────────
+  var enCours = null;
+  function paramsAction() {
+    var q = new URLSearchParams(location.hash.slice(1));
+    var v = q.get('v') || '';
+    if (!/^[\w-]{11}$/.test(v)) { return null; }
+    return { v: v, d: Math.max(0, parseFloat(q.get('d')) || 0), f: parseFloat(q.get('f')) || 0, t: q.get('t') || '', n: q.get('n') || '' };
+  }
+  function lireAction() {
+    var a = paramsAction();
+    if (!a) { message('Cette page sert de lecteur vidéo aux rapports du Castres Olympique.<br>Ouvrez-la depuis un rapport exporté.'); return; }
+    enCours = a;
+    $('titre').textContent = a.t || 'Castres Olympique — vidéo';
+    document.title = a.t || 'Lecteur vidéo';
+    charger(a);
+  }
+  window.addEventListener('hashchange', function () { if (!modeListe && apiPrete) { lireAction(); } });
+
+  // ── Messages du rapport ────────────────────────────────────────────────
   window.addEventListener('message', function (e) {
     var d = e.data || {};
-    if (!yt || !pret || !d.co) { return; }
-    if (d.ordre === 'rejouer' && enCours) { yt.seekTo(enCours.d, true); yt.playVideo(); }
+    if (!d.co) { return; }
+    if (d.ordre === 'liste') { modeListe = true; document.body.classList.remove('simple'); recevoirListe(d); return; }
+    if (!yt || !pret) { return; }
+    if (d.ordre === 'rejouer') { var c = modeListe ? clips[i] : enCours; if (c) { yt.seekTo(c.d, true); yt.playVideo(); charge = Date.now(); } }
     if (d.ordre === 'pause') { yt.pauseVideo(); }
-    if (d.ordre === 'decaler' && typeof d.sec === 'number') {
-      yt.seekTo(Math.max(0, yt.getCurrentTime() + d.sec), true); yt.playVideo();
-      if (enCours) { enCours.charge = Date.now(); }   // un saut au-delà de la fin n'est pas une « fin » d'action immédiate
-    }
+    if (d.ordre === 'decaler' && typeof d.sec === 'number') { decaler(d.sec); }
   });
+
+  function onYouTubeIframeAPIReady() {
+    apiPrete = true;
+    ajuster();
+    if (modeListe) {
+      if (i >= 0 && clips[i]) { charger(clips[i]); }
+      prevenir({ etat: 'pret_liste' });   // le rapport envoie alors la liste
+    } else {
+      lireAction();
+    }
+  }
+  if (modeListe) { prevenir({ etat: 'pret_liste' }); }
 </script>
 <script src="https://www.youtube.com/iframe_api"></script>
 </body>
