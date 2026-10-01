@@ -74,12 +74,16 @@
   }
   function onYouTubeIframeAPIReady() { lire(); }
   window.addEventListener('hashchange', function () { if (window.YT && YT.Player) { lire(); } });
-  // Le rapport peut aussi demander « Rejouer » / « Pause » sans changer d'adresse.
+  // Le rapport peut aussi demander « Rejouer », « Pause » ou −5 s / +5 s sans changer d'adresse.
   window.addEventListener('message', function (e) {
     var d = e.data || {};
     if (!yt || !pret || !d.co) { return; }
     if (d.ordre === 'rejouer' && enCours) { yt.seekTo(enCours.d, true); yt.playVideo(); }
     if (d.ordre === 'pause') { yt.pauseVideo(); }
+    if (d.ordre === 'decaler' && typeof d.sec === 'number') {
+      yt.seekTo(Math.max(0, yt.getCurrentTime() + d.sec), true); yt.playVideo();
+      if (enCours) { enCours.charge = Date.now(); }   // un saut au-delà de la fin n'est pas une « fin » d'action immédiate
+    }
   });
 </script>
 <script src="https://www.youtube.com/iframe_api"></script>
