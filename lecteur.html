@@ -35,7 +35,7 @@
     var q = new URLSearchParams(location.hash.slice(1));
     var v = q.get('v') || '';
     if (!/^[\w-]{11}$/.test(v)) { return null; }
-    return { v: v, d: Math.max(0, parseFloat(q.get('d')) || 0), f: parseFloat(q.get('f')) || 0, t: q.get('t') || '' };
+    return { v: v, d: Math.max(0, parseFloat(q.get('d')) || 0), f: parseFloat(q.get('f')) || 0, t: q.get('t') || '', n: q.get('n') || '', charge: Date.now() };
   }
   function prevenir(o) { try { if (window.opener) { window.opener.postMessage(Object.assign({ co: 1 }, o), '*'); } } catch (e) {} }
   function message(html) { var m = document.getElementById('msg'); m.innerHTML = html; m.style.display = html ? 'flex' : 'none'; }
@@ -54,7 +54,13 @@
         playerVars: { start: Math.floor(a.d), end: a.f > a.d ? Math.ceil(a.f) : undefined, autoplay: 1, rel: 0, playsinline: 1 },
         events: {
           onReady: function () { pret = true; prevenir({ etat: 'pret' }); },
-          onStateChange: function (e) { if (e.data === YT.PlayerState.ENDED) { prevenir({ etat: 'fin' }); } },
+          onStateChange: function (e) {
+            // « Fin » de l'action en cours seulement : au changement d'action,
+            // YouTube signale parfois encore la fin de la précédente.
+            if (e.data === YT.PlayerState.ENDED && enCours && Date.now() - enCours.charge > 1500) {
+              prevenir({ etat: 'fin', n: enCours.n });
+            }
+          },
           onError: function (e) {
             prevenir({ etat: 'erreur', code: e.data });
             message('YouTube ne peut pas lire cette vidéo ici (erreur ' + e.data + ').<br><a target="_blank" rel="noopener" href="https://www.youtube.com/watch?v='
