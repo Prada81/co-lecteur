@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Lecteur vidéo — Castres Olympique</title>
+<!--
+  Lecteur vidéo des rapports exportés (Rapport Fin de Match / Rapport ADV).
+  Ne contient AUCUNE donnée : le rapport ouvre cette page dans une fenêtre et
+  lui indique, dans l'adresse (#v=...&d=...&f=...), la vidéo YouTube et le
+  début / la fin de l'action à montrer. YouTube refuse son lecteur dans un
+  fichier ouvert depuis l'ordinateur ; ici, la page a une vraie adresse web.
+-->
+<style>
+  html, body { margin: 0; height: 100%; background: #000; color: #fff;
+               font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; }
+  #tete { position: fixed; top: 0; left: 0; right: 0; height: 34px; display: flex; align-items: center;
+          gap: 10px; padding: 0 12px; background: #092966; font-size: 14px; font-weight: 700; z-index: 2; }
+  #tete span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #zone { position: fixed; top: 34px; left: 0; right: 0; bottom: 0; }
+  #zone iframe, #p { width: 100%; height: 100%; display: block; }
+  #msg { position: fixed; inset: 34px 0 0 0; display: none; align-items: center; justify-content: center;
+         text-align: center; padding: 30px; font-size: 16px; line-height: 1.5; }
+  #msg a { color: #8cb6fa; }
+</style>
+</head>
+<body>
+<div id="tete"><span id="titre">Castres Olympique — vidéo</span></div>
+<div id="zone"><div id="p"></div></div>
+<div id="msg"></div>
+<script>
+  var yt = null, pret = false, enCours = null;
+  function params() {
+    var q = new URLSearchParams(location.hash.slice(1));
+    var v = q.get('v') || '';
+    if (!/^[\w-]{11}$/.test(v)) { return null; }
+    return { v: v, d: Math.max(0, parseFloat(q.get('d')) || 0), f: parseFloat(q.get('f')) || 0, t: q.get('t') || '' };
+  }
+  function prevenir(o) { try { if (window.opener) { window.opener.postMessage(Object.assign({ co: 1 }, o), '*'); } } catch (e) {} }
+  function message(html) { var m = document.getElementById('msg'); m.innerHTML = html; m.style.display = html ? 'flex' : 'none'; }
+  function lire() {
+    var a = params();
+    if (!a) { message('Cette page sert de lecteur vidéo aux rapports du Castres Olympique.<br>Ouvrez-la depuis un rapport exporté.'); return; }
+    message('');
+    document.getElementById('titre').textContent = a.t || 'Castres Olympique — vidéo';
+    document.title = a.t || 'Lecteur vidéo';
+    enCours = a;
+    var o = { videoId: a.v, startSeconds: a.d };
+    if (a.f > a.d) { o.endSeconds = a.f; }
+    if (!yt) {
+      yt = new YT.Player('p', {
+        width: '100%', height: '100%', videoId: a.v,
+        playerVars: { start: Math.floor(a.d), end: a.f > a.d ? Math.ceil(a.f) : undefined, autoplay: 1, rel: 0, playsinline: 1 },
+        events: {
+          onReady: function () { pret = true; prevenir({ etat: 'pret' }); },
+          onStateChange: function (e) { if (e.data === YT.PlayerState.ENDED) { prevenir({ etat: 'fin' }); } },
+          onError: function (e) {
+            prevenir({ etat: 'erreur', code: e.data });
+            message('YouTube ne peut pas lire cette vidéo ici (erreur ' + e.data + ').<br><a target="_blank" rel="noopener" href="https://www.youtube.com/watch?v='
+              + encodeURIComponent(a.v) + '&t=' + Math.floor(a.d) + 's">Ouvrir sur YouTube</a>');
+          }
+        }
+      });
+    } else if (pret) {
+      yt.loadVideoById(o);
+    }
+  }
+  function onYouTubeIframeAPIReady() { lire(); }
+  window.addEventListener('hashchange', function () { if (window.YT && YT.Player) { lire(); } });
+  // Le rapport peut aussi demander « Rejouer » / « Pause » sans changer d'adresse.
+  window.addEventListener('message', function (e) {
+    var d = e.data || {};
+    if (!yt || !pret || !d.co) { return; }
+    if (d.ordre === 'rejouer' && enCours) { yt.seekTo(enCours.d, true); yt.playVideo(); }
+    if (d.ordre === 'pause') { yt.pauseVideo(); }
+  });
+</script>
+<script src="https://www.youtube.com/iframe_api"></script>
+</body>
+</html>
