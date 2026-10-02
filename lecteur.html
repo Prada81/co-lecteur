@@ -16,6 +16,9 @@
     le même lecteur que le rapport : liste, précédent / suivant, -5 s / +5 s,
     enchaînement. Rien n'est enregistré.
   - #v=...&d=...&f=... : une seule action (exports plus anciens).
+  - #pack=... : « pack joueur » envoyé par un coach (lien ou QR code). La liste
+    des clips et les notes du coach sont DANS le lien (compressées), jamais sur
+    ce site : la partie après # n'est pas transmise au serveur.
 -->
 <style>
   html, body { margin: 0; height: 100%; background: #05070d; color: #fff;
@@ -47,12 +50,34 @@
   .item .m { opacity: .75; font-size: 12px; } .item .txt { flex: 1; min-width: 0; }
   .item a { color: #fff; opacity: .8; font-size: 11px; text-decoration: none; border: 1px solid rgba(255,255,255,.35); border-radius: 6px; padding: 1px 6px; white-space: nowrap; }
   body.simple #liste, body.simple #ctrl, body.simple #compteur, body.simple #yt, body.simple #fermer { display: none; }
+  /* Pack joueur : note du coach, en-tête club */
+  #note { display: none; margin-top: 8px; background: #ffd400; color: #0a1a40; font-weight: 800; font-size: 15px;
+          padding: 10px 14px; border-radius: 10px; line-height: 1.35; }
+  .item .nt { color: #ffd400; font-size: 12px; margin-top: 2px; }
+  .item .q { display: inline-block; background: rgba(255,255,255,.12); border-radius: 4px; padding: 0 5px; margin: 2px 3px 0 0; font-size: 11px; }
+  #logo { display: none; background: #fff; color: #004cd2; font-weight: 900; padding: 3px 10px; border-radius: 5px; font-size: 14px; }
+  #logo span { color: #CE1E1E; margin-left: 3px; }
+  body.pack #logo { display: inline-block; } body.pack #fermer { display: none; }
+  /* Pack : le lien YouTube est déjà sur chaque clip de la liste. */
+  body.pack #yt { display: none !important; }
+  /* Téléphone (portrait) : vidéo en haut, liste en dessous */
+  @media (max-width: 820px) {
+    #corps { flex-direction: column; overflow: auto; }
+    #gauche { flex: 0 0 auto; padding: 8px; }
+    #zone { flex: 0 0 auto; }
+    #boite { width: 100% !important; max-height: none; }
+    #liste { width: auto; flex: 1 0 auto; border-left: none; border-top: 1px solid rgba(255,255,255,.15); overflow: visible; }
+    #titre { font-size: 16px; min-width: 0; }
+    #ctrl .btn { padding: 10px 12px; font-size: 14px; }
+    #ctrl label { margin-left: 0 !important; }
+    #yt { order: 5; }
+  }
 </style>
 </head>
 <body>
 <div id="cadre">
   <div id="tete">
-    <span id="titre">Castres Olympique — vidéo</span><span id="compteur"></span>
+    <span id="logo">CO<span>U21</span></span><span id="titre">Castres Olympique — vidéo</span><span id="compteur"></span>
     <a id="yt" class="btn yt" target="_blank" rel="noopener" style="display:none">▶ Ouvrir sur YouTube</a>
     <button type="button" id="fermer" class="btn sec">✕ Fermer</button>
   </div>
@@ -60,6 +85,7 @@
     <div id="gauche">
       <div id="zone"><div id="boite"><div id="p"></div><div id="msg"></div></div></div>
       <div id="info"></div>
+      <div id="note"></div>
       <div id="ctrl">
         <button type="button" id="prec" class="btn">◀ Précédent</button>
         <button type="button" id="moins5" class="btn" title="Reculer de 5 secondes">⏪ −5 s</button>
@@ -131,13 +157,15 @@
     Array.prototype.forEach.call($('liste').children, function (el, n) { el.classList.toggle('actif', n === i); });
     if ($('liste').children[i]) { $('liste').children[i].scrollIntoView({ block: 'nearest' }); }
     $('info').textContent = (c.nom ? c.nom + ' · ' : '') + (c.minute || '') + (c.libelle ? ' · ' + c.libelle : '');
+    $('note').textContent = c.note ? '📝 ' + c.note : '';
+    $('note').style.display = c.note ? 'block' : 'none';
     var l = lienYT(c); $('yt').style.display = l ? '' : 'none'; if (l) { $('yt').href = l; }
     if (apiPrete) { charger(c); }
   }
   function recevoirListe(d) {
     clips = (d.clips || []).filter(function (c) { return c && (!c.v || /^[\w-]{11}$/.test(c.v)); });
     if (!clips.length) { return; }
-    $('titre').textContent = '▶ ' + (d.titre || 'Clips');
+    $('titre').textContent = (pack ? '' : '▶ ') + (d.titre || 'Clips');
     document.title = d.titre || 'Lecteur vidéo';
     var liste = $('liste'); liste.innerHTML = '';
     clips.forEach(function (c, n) {
@@ -147,6 +175,7 @@
       it.querySelector('strong').textContent = (n + 1) + '. ' + (c.nom || '');
       it.querySelector('.m').textContent = c.minute || '';
       it.querySelector('.l').textContent = c.libelle || '';
+      if (c.note) { var nt = document.createElement('div'); nt.className = 'nt'; nt.textContent = '📝 ' + c.note; it.querySelector('.txt').appendChild(nt); }
       var l = lienYT(c);
       if (l) {
         var a = document.createElement('a'); a.href = l; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'YouTube ↗';
@@ -202,17 +231,54 @@
     if (d.ordre === 'decaler' && typeof d.sec === 'number') { decaler(d.sec); }
   });
 
+  // ── Pack joueur (#pack=...) ────────────────────────────────────────────
+  // Format : "z" + base64url(deflate-raw(JSON)) ou "j" + base64url(JSON).
+  // JSON : { t: titre, V: [id YouTube], N: [nom du match], c: [[video, debut, fin, minute, libelle, sens, note]] }
+  function b64urlOctets(s) {
+    s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) { s += '='; }
+    var bin = atob(s), o = new Uint8Array(bin.length);
+    for (var k = 0; k < bin.length; k++) { o[k] = bin.charCodeAt(k); }
+    return o;
+  }
+  function lirePack() {
+    var m = /(?:^#|&)pack=([^&]+)/.exec(location.hash);
+    if (!m) { return null; }
+    var brut = decodeURIComponent(m[1]), type = brut.charAt(0), octets = b64urlOctets(brut.slice(1));
+    var texte = type === 'z'
+      ? new Response(new Blob([octets]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text()
+      : Promise.resolve(new TextDecoder().decode(octets));
+    return texte.then(function (t) {
+      var d = JSON.parse(t), V = d.V || [], N = d.N || [];
+      return { titre: d.t || 'Mes clips', depart: 0, clips: (d.c || []).map(function (r) {
+        return { v: V[r[0]] || '', nom: N[r[0]] || '', d: +r[1] || 0, f: +r[2] || 0, minute: r[3] || '', libelle: r[4] || '', sens: r[5] || '', note: r[6] || '' };
+      }) };
+    });
+  }
+  var pack = null;
+  if (/(?:^#|&)pack=/.test(location.hash)) {
+    modeListe = true;
+    document.body.classList.remove('simple');
+    document.body.classList.add('pack');
+    pack = lirePack();
+    if (pack) {
+      pack.then(function (d) { recevoirListe(d); })
+          .catch(function () { message('Ce lien est incomplet ou abîmé. Demandez à votre coach de vous le renvoyer.'); });
+    }
+  }
+
   function onYouTubeIframeAPIReady() {
     apiPrete = true;
     ajuster();
-    if (modeListe) {
+    if (pack) {
+      if (i >= 0 && clips[i]) { charger(clips[i]); }
+    } else if (modeListe) {
       if (i >= 0 && clips[i]) { charger(clips[i]); }
       prevenir({ etat: 'pret_liste' });   // le rapport envoie alors la liste
     } else {
       lireAction();
     }
   }
-  if (modeListe) { prevenir({ etat: 'pret_liste' }); }
+  if (modeListe && !pack) { prevenir({ etat: 'pret_liste' }); }
 </script>
 <script src="https://www.youtube.com/iframe_api"></script>
 </body>
