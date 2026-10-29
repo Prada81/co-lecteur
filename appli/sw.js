@@ -1,8 +1,8 @@
-// Copie hors ligne de l'appli CO Espoirs (version 2026-10-29T10:17:33.255Z).
-const CACHE = "co-espoirs";
+// Copie hors ligne de l'appli CO Espoirs (version 2026-10-29T10:41:57.999Z).
+const CACHE = "co-espoirs-2026-10-29T10:41:57.999Z";
 const FICHIERS = ["./", "manifest.webmanifest", "icone-192.png", "icone-512.png", "icone-512-masque.png", "apple-touch-icon.png"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FICHIERS)).then(() => self.skipWaiting())); });
-self.addEventListener("activate", (e) => { e.waitUntil(self.clients.claim()); });
+self.addEventListener("activate", (e) => { e.waitUntil(caches.keys().then((k) => Promise.all(k.filter((x) => x !== CACHE).map((x) => caches.delete(x)))).then(() => self.clients.claim())); });
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET" || url.origin !== location.origin) { return; }
