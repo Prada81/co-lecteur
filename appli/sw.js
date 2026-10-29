@@ -1,4 +1,4 @@
-// Copie hors ligne de l'appli CO Espoirs (version 2026-10-29T07:42:20.466Z).
+// Copie hors ligne de l'appli CO Espoirs (version 2026-10-29T08:06:30.020Z).
 const CACHE = "co-espoirs";
 const FICHIERS = ["./", "manifest.webmanifest", "icone-192.png", "icone-512.png", "icone-512-masque.png", "apple-touch-icon.png"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FICHIERS)).then(() => self.skipWaiting())); });
