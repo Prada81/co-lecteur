@@ -1,5 +1,5 @@
-// Copie hors ligne de l'appli CO Espoirs (version 2026-10-29T22:54:31.308Z).
-const CACHE = "co-espoirs-2026-10-29T22:54:31.308Z";
+// Copie hors ligne de l'appli CO Espoirs (version 2026-11-04T12:10:04.628Z).
+const CACHE = "co-espoirs-2026-11-04T12:10:04.628Z";
 const FICHIERS = ["./", "manifest.webmanifest", "icone-192.png", "icone-512.png", "icone-512-masque.png", "apple-touch-icon.png"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FICHIERS)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", (e) => { e.waitUntil(caches.keys().then((k) => Promise.all(k.filter((x) => x !== CACHE).map((x) => caches.delete(x)))).then(() => self.clients.claim())); });
@@ -7,6 +7,10 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET" || url.origin !== location.origin) { return; }
   if (url.pathname.endsWith("/version.json")) { return; }
+  // Sur Cloudflare : les vidéos (lues par morceaux) et le dépôt passent directement ; la reconnexion
+  // à Cloudflare Access (?connexion=…) aussi, pour suivre sa page de connexion.
+  if (url.pathname.includes("/videos/") || url.pathname.includes("/depot")) { return; }
+  if (e.request.mode === "navigate" && url.searchParams.has("connexion")) { return; }
   if (e.request.mode === "navigate" || url.pathname.endsWith("/") || url.pathname.endsWith("/index.html")) {
     // Toujours demander au serveur s'il y a plus récent (cache: "no-cache" : GitHub laisse sinon 10 min de copie).
     // Réseau lent (plus de 2 s) : la copie du téléphone tout de suite, la nouvelle version se range pour la prochaine fois.
